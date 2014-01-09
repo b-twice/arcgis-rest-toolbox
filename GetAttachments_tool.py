@@ -4,11 +4,10 @@ import arcpy
 import shutil
 
 class GetToken(object):
-    '''A token must be generated and added to each query of the server for session verification'''
+    '''Pass user information to ArcGIS and obtain a token'''
 
     def gentoken(self, username, password,
                 referer = 'www.arcgis.com', expiration=60):
-        '''Gets token from referer'''
         query_dict = {'username': username,
                       'password': password,
                       'expiration': str(expiration),
@@ -22,8 +21,13 @@ class GetToken(object):
         return token['token']
 
 class DownloadAttachments(GetToken):
-
+    '''
+    Series of tools that queries REST feature service --> obtains object ids
+    --> returns attachment ids from object id --> queries photo with a
+    attachment id and downloads to local folder
+    '''
     def __init__(self, fs, field, destination, username, password):
+        ''' Field is optional, will name folders based on attribute name'''
         self.fs = fs +'/'
         self.field = field
         self.where = '1=1'
@@ -31,24 +35,25 @@ class DownloadAttachments(GetToken):
         self.destination = os.path.join(destination, 'Photos')
 
     def jsonload(self, url, query):
-        '''Loads feature service with query and returns jso'''
+        '''Loads feature service with query and returns json'''
         return json.loads(urllib.urlopen(url + query).read())
 
     def queryid(self):
-        '''Query IDs and return list of object IDs'''
+        '''Object ids are needed to obtain attachment ids'''
         objquery = ('query?where={}&returnIdsOnly=true&'
                     'f=json&token={}').format(self.where, self.token)
         return self.jsonload(self.fs, objquery)['objectIds']
 
     def queryfield(self):
-        '''Query attributes based on field passed'''
+        '''Get attributes based on field passed'''
         fieldquery = ('query?where={}&outFields={}&'
                 'f=json&token={}').format(self.where,self.field, self.token)
         fieldtext = self.jsonload(self.fs,fieldquery)['features']
         return [str(f['attributes'][self.field]) for f in fieldtext]
 
     def zipdata(self):
-        '''Id photos based on field query, if not, photo ids will be given a plain integer value'''
+        '''Id photos based on field query, if not, photo ids will be given a
+        plain integer value'''
         id = self.queryid()
         try:
             if len(self.field) > 0:
@@ -62,7 +67,7 @@ class DownloadAttachments(GetToken):
         return path.replace('\\','/')
 
     def queryimage(self, objectid):
-        '''Each image has an id which can only be obtained via object id'''
+        '''For each object id to obtain all attachment ids'''
         attachment = self.slashclean(os.path.join(
                                 self.fs, str(objectid), 'attachments'))
         imgquery = ('?f=json&token={}'.format(self.token))
@@ -80,7 +85,7 @@ class DownloadAttachments(GetToken):
         return fsmap
 
     def downloadimage(self, imgid, imgurl):
-        '''Takes url for image and downloads to directory'''
+        '''Takes final url for image and downloads to directory'''
         req = urllib2.Request(imgurl)
         response = urllib2.urlopen(req)
         output = open(str(imgid) + '.jpg', 'wb')
@@ -88,8 +93,10 @@ class DownloadAttachments(GetToken):
         output.close()
 
     def allimages (self):
+        '''Creates a directory for all images downloaded'''
         photolist = [[os.path.join(dirpath, f),f] for dirpath, dirnames, files
-            in os.walk(self.destination) for f in files if f.endswith('.jpg') or f.endswith('.jpg')]
+            in os.walk(self.destination) for f in files if f.endswith('.jpg')
+            or f.endswith('.jpg')]
         placement = os.path.join(self.destination, 'All Photos')
         os.makedirs(placement)
         for photo in photolist:
@@ -122,27 +129,21 @@ class DownloadAttachments(GetToken):
 
 class Toolbox(object):
     def __init__(self):
-        """Define the toolbox (the name of the toolbox is the name of the
-        .pyt file)."""
         self.label = "Download Attachments toolbox"
         self.alias = "attachments"
-
-        # List of tool classes associated with this toolbox
         self.tools = [GetImages]
 
 
 class GetImages(DownloadAttachments):
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
         self.label = "Download Attachments"
         self.description = ''' Download attachments takes a feature
                                service and pulls all photos from the service
-                               into a directory organized with distinct
+                               into a directory organized with seperate
                                folders for each feature '''
         self.canRunInBackground = True
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
         in_service = arcpy.Parameter(
             displayName = 'Input Feature Service URL',
             name = 'in_service',
@@ -202,12 +203,17 @@ class GetImages(DownloadAttachments):
                                     inUsername, inPassword)
             run.pullimages()
         except WindowsError:
-            messages.addErrorMessage('The directory \"Photos\" cannot be created within the location, {}, you gave. Please clear or change directories and try again.'.format(inDirectory))
+            messages.addErrorMessage('The directory \"Photos\" cannot be '
+                'created within the location, {}, you gave. Please clear or '
+                'change directories and try again.'.format(inDirectory))
         except KeyError as e:
             if e.message == 'token':
-                messages.addErrorMessage('The token cannot be obtained...check your credentials.')
+                messages.addErrorMessage('The token cannot be obtained, check '
+                    'your credentials.')
             else:
-                messages.addErrorMessage('Oh my, it appears as if the feature service has no attachments.')
+                messages.addErrorMessage('Oh my, it appears as if the feature '
+                    'service has no attachments.')
         except ValueError:
-            messages.addErrorMessage('You might want to check your feature service url again. {} is not working.'.format(inService))
+            messages.addErrorMessage('You might want to check your feature '
+                'service url again. {} is not working.'.format(inService))
 
