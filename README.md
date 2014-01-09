@@ -2,7 +2,7 @@ Various python scripts that can be imported into ArcGIS
 as a python toolbox.
 
 ~~~~~~~
-<b>Get Attachments <b>
+Get Attachments 
 
 Interact with Feature Service to pull any photo attachments
 stored in features. Builds a local directory as follows:
