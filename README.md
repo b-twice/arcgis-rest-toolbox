@@ -1,5 +1,7 @@
 Various python scripts that can be imported into ArcGIS
-as a python toolbox.
+as a python toolbox. NOTE - python toolboxes were introduced
+in ArcGIS 10.1. You must create a python toolbox, not
+your standard toolbox, for this to run.
 
 **Get Attachments**
 ~~~~~~
