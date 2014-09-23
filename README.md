@@ -4,23 +4,22 @@ in ArcGIS 10.1. You must create a python toolbox, not
 your standard toolbox, for this to run.
 
 **Pull Replica**
-~~~~~~
+
 Simple tool to pull feature services from ArcGIS Online into a zipped
 geodatabase, preserving domain values.
-
 Provides the option to pull attachments or not (which is not provided in AGO when exporting a FS to a geodatabase).
 
 Requires path to feature service, account login, and whether to
 pull the attachments or not (defaults to no attachments).
 
-~~~~~~
 
 **Get Attachments**
-~~~~~~
-
-##### NOTE
+###### NOTE
 This script is severely deprecated. Will function in ArcGIS 10.1 > but
 needs a major overhaul of internals and externals.
+
+~~~~~~
+
 
 Interact with Feature Service to pull any photo attachments
 stored in features. Builds a local directory as follows:
