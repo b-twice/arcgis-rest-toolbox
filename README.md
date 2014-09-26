@@ -14,9 +14,10 @@ pull the attachments or not (defaults to no attachments).
 
 
 **Get Attachments**
-###### NOTE
-This script is severely deprecated. Will function in ArcGIS 10.1 > but
-needs a major overhaul of internals and externals.
+###### TODO
++ Handle OS functionality for overwriting
++ Look into optional field for naming
++ roll into python toolbox
 
 ~~~~~~
 
