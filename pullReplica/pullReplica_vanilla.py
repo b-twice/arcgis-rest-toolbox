@@ -84,12 +84,6 @@ CREDENTIALS = {
 
 TOKEN_URL = "https://www.arcgis.com/sharing/rest/generateToken"
 
-ATTACHMENTS = {
-    'where': '1=1',
-    'token': '',
-    'f': 'json'
-}
-
 REPLICA = {
     "geometry": '',
     "geometryType": "esriGeometryEnvelope",
@@ -108,53 +102,17 @@ REPLICA = {
     "f": "json"
 }
 
-
-class App(object):
-    ''' Class with methods to perform tasks with ESRI's REST service '''
-    def __init__ (self, fs, token, destination):
-        self.fs_url = fs
-        self.token = token
-        self.destination = destination
-
-    def pull_attachments(self, query, field=None):
-        query['token'] = self.token
-        layer_url = add_path(self.fs_url, "0/query")
-        feature_ids = query_id_or_field(layer_url, query, field)
-
-        os.chdir(self.destination)
-        root_name = time.strftime("%Y_%m_%d_") + self.get_fs_name(self.fs_url, self.token) + "_Photos"
-        root_file = create_and_set_dir(root_name)
-        for feature in feature_ids:
-            os.chdir(root_file)
-            img_url = add_path(self.fs_url,
-                "0/{}/attachments").format(feature)
-            attachments = get_response(img_url, query)['attachmentInfos']
-            if len(attachments) > 0:
-                create_and_set_dir(str(feature))
-                for attachment in attachments:
-                    attachment_url = add_path(img_url,
-                        "{}/download".format(attachment['id']))
-                    attachment_file = get_response(attachment_url,
-                        {'token':self.token},
-                        get_json = False)
-                    pull_to_local(attachment_file, attachment['id'],
-                        '', 'jpg')
-        group_photos(root_file, "ALL")
-
-    def pull_replica(self, query):
-        query['token'] = self.token
-        replica_url = add_path(self.fs_url, "createReplica")
-        zip_url = get_response(replica_url, query)['responseUrl']
-        zip_file = get_response(zip_url, get_json=False)
-        file_name = time.strftime("%Y_%m_%d_") + self.get_fs_name(self.token, self.fs_url)
-        pull_to_local(zip_file, file_name, self.destination, 'zip')
-
+def pull_replica(fs_url, query, token, destination):
+    query['token'] = token
+    replica_url = add_path(fs_url, "createReplica")
+    zip_url = get_response(replica_url, query)['responseUrl']
+    zip_file = get_response(zip_url, get_json=False)
+    file_name = time.strftime("%Y_%m_%d_") + get_fs_name(fs_url, token)
+    pull_to_local(zip_file, file_name, destination, 'zip')
 
 if __name__ == "__main__":
     TOKEN = login("", "")
     FS_URL = ""
     DEST = r""
-    RUN = App(FS_URL, TOKEN, DEST)
-    RUN.pull_replica(REPLICA)
-    RUN.pull_attachments(ATTACHMENTS)
+    pull_replica(FS_URL, REPLICA, TOKEN, DEST)
 
