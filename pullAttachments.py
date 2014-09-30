@@ -6,13 +6,23 @@ import imghdr
 
 ### REST functions
 
-def check_service(serviceUrl):
-    if serviceUrl == None:
+def check_service(service_url):
+    components = os.path.split(service_url)
+    if service_url == None:
         return True
+    elif components[-1].isdigit() :
+        return "Layer"
+    elif components[-1] == "FeatureServer":
+        return "FeatureServer"
     else:
-        if os.path.split(serviceUrl)[-1] != 'FeatureServer':
-            return False
-        return True
+        return False
+
+def get_service_url(layer_url):
+    components = os.path.split(layer_url)
+    if components[1] == "FeatureServer":
+        return layer_url
+    else:
+        return components[0]
 
 def get_response(url, query='', get_json=True):
     encoded = urllib.urlencode(query)
@@ -34,8 +44,8 @@ def login (username, password):
     else:
         return response['token']
 
-def get_fs_name(fs_url, token):
-    return get_response(fs_url,
+def get_fs_name(input_url, token):
+    return get_response(input_url,
         {'f':'json', 'token':token})['layers'][0]['name']
 
 def query_id_or_field(url, query, field=None):
@@ -111,22 +121,32 @@ REPLICA = {
 
 class App(object):
     ''' Class with methods to perform tasks with ESRI's REST service '''
-    def __init__ (self, fs, token, destination):
-        self.fs_url = fs
+    def __init__ (self, input_url, token, destination):
+        self.input_url = input_url
         self.token = token
         self.destination = destination
+        self.fs_url = get_service_url(input_url)
+        self.layer_url = None
+
+    def check_input_url(self):
+        input_type = check_service(self.input_url)
+        if input_type == "Layer":
+            self.layer_url = self.input_url
+        if input_type == "FeatureServer":
+            self.layer_url = add_path(self.input_url, "0/query")
+
 
     def pull_attachments(self, query, field=None):
         query['token'] = self.token
-        layer_url = add_path(self.fs_url, "0/query")
-        feature_ids = query_id_or_field(layer_url, query, field)
-
+        self.check_input_url()
+        feature_ids = query_id_or_field(self.layer_url, query, field)
         os.chdir(self.destination)
-        root_name = time.strftime("%Y_%m_%d_") + self.get_fs_name(self.fs_url, self.token) + "_Photos"
+        root_name = time.strftime("%Y_%m_%d_") + get_fs_name(self.input_url,
+            self.token) + "_Photos"
         root_file = create_and_set_dir(root_name)
         for feature in feature_ids:
             os.chdir(root_file)
-            img_url = add_path(self.fs_url,
+            img_url = add_path(self.input_url,
                 "0/{}/attachments").format(feature)
             attachments = get_response(img_url, query)['attachmentInfos']
             if len(attachments) > 0:
@@ -146,15 +166,16 @@ class App(object):
         replica_url = add_path(self.fs_url, "createReplica")
         zip_url = get_response(replica_url, query)['responseUrl']
         zip_file = get_response(zip_url, get_json=False)
-        file_name = time.strftime("%Y_%m_%d_") + self.get_fs_name(self.token, self.fs_url)
+        file_name = time.strftime("%Y_%m_%d_") + get_fs_name(self.token,
+            self.fs_url)
         pull_to_local(zip_file, file_name, self.destination, 'zip')
 
 
 if __name__ == "__main__":
     TOKEN = login("", "")
-    FS_URL = ""
+    INPUT_URL = ""
     DEST = r""
-    RUN = App(FS_URL, TOKEN, DEST)
+    RUN = App(INPUT_URL, TOKEN, DEST)
     RUN.pull_replica(REPLICA)
     RUN.pull_attachments(ATTACHMENTS)
 
