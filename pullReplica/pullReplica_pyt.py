@@ -4,57 +4,86 @@ import json, urllib, urllib2
 import urlparse
 import time
 
-def checkService(service_url):
-     if service_url == None:
-          return True
-     else:
-          if os.path.split(service_url)[-1] != "FeatureServer":
-               return False
-          return True
+CREDENTIALS = {
+    'username': '',
+    'password': '',
+    'expiration': '60',
+    'client': 'referer',
+    'referer': 'www.arcgis.com',
+    'f': 'json'
+}
 
-def getResponse(url, query='', return_json=True):
-     encoded_query = urllib.urlencode(query)
-     request = urllib2.Request(url, encoded_query)
-     if return_json:
-          return json.loads(urllib2.urlopen(request).read())
-     return urllib2.urlopen(request).read()
+TOKEN_URL = "https://www.arcgis.com/sharing/rest/generateToken"
 
-def addPath(url, path):
-     return urlparse.urljoin(url + "/", path)
+REPLICA = {
+    "geometry": '',
+    "geometryType": "esriGeometryEnvelope",
+    "inSR": '',
+    "layerQueries": '',
+    "layers": "0",
+    "replicaName": "read_only_rep",
+    "returnAttachments": 'false',
+    "returnAttachmentsDataByUrl": 'true',
+    "transportType": "esriTransportTypeEmbedded",
+    "async": 'false',
+    "syncModel": "none",
+    "dataFormat": "filegdb",
+    "token": '',
+    "replicaOptions": '',
+    "f": "json"
+}
 
-def pullToZip(url, name, destination):
-     os.chdir(destination)
-     output = open(name + ".zip", 'wb')
-     output.write(url)
-     output.close()
 
-def genToken (username, password, referer='www.arcgis.com', expiration=60):
-     '''Authorize user information with ArcGIS.com and obtain a token.'''
-     query_dict = {'username': username,
-                    'password': password,
-                    'expiration': str(expiration),
-                    'client': 'referer',
-                    'referer': referer,
-                    'f': 'json'}
-     token_url = "https://www.arcgis.com/sharing/rest/generateToken"
-     token = getResponse(token_url, query_dict)
-     return token['token']
+def check_service(service_url):
+    if service_url == None:
+        return True
+    else:
+        if os.path.split(service_url)[-1] != "FeatureServer":
+            return False
+        return True
 
-def createReplica (service_url, query, destination):
-     ''' Makes three request to the Feature Service:
-               1. One to "createReplica" to get url of the zip file
-               2. One to zip url to get the zip file
-               3. One to "featureServer" to get the layer name '''
+def get_response(url, query='', return_json=True):
+    encoded_query = urllib.urlencode(query)
+    request = urllib2.Request(url, encoded_query)
+    if return_json:
+        return json.loads(urllib2.urlopen(request).read())
+    return urllib2.urlopen(request).read()
 
-     replica_url = addPath(service_url, "createReplica")
-     zip_url = getResponse(replica_url, query)['responseUrl']
-     zip_file = getResponse(zip_url, return_json=False)
+def add_path(url, path):
+    return urlparse.urljoin(url + "/", path)
 
-     fs_resp =  getResponse(service_url, {'f':'json','token':query['token']})['layers'][0]['name']
-     fs_name = time.strftime("%Y_%m_%d_") + fs_resp
+def pull_to_local(url, name, destination, file_format = ''):
+    if destination:
+        os.chdir(destination)
+    if format:
+        output = open(str(name) + '.{}'.format(file_format), 'wb')
+    else:
+        output = open(str(name), 'wb')
+    output.write(url)
+    output.close()
 
-     pullToZip(zip_file, fs_name, destination)
-     arcpy.AddMessage("{} successfully replicated.".format(fs_name))
+def login (username, password):
+    CREDENTIALS['username'] = username
+    CREDENTIALS['password'] = password
+    response = get_response(TOKEN_URL, CREDENTIALS)
+    if 'error' in response:
+        print response['error']
+        exit()
+    else:
+        return response['token']
+
+def get_fs_name(input_url, token):
+    return get_response(input_url,
+        {'f':'json', 'token':token})['layers'][0]['name']
+
+def pull_replica(fs_url, query, token, destination):
+    query['token'] = token
+    replica_url = add_path(fs_url, "createReplica")
+    zip_url = get_response(replica_url, query)['responseUrl']
+    zip_file = get_response(zip_url, return_json=False)
+    file_name = time.strftime("%Y_%m_%d_") + get_fs_name(fs_url, token)
+    pull_to_local(zip_file, file_name, destination, 'zip')
+
 
 class Toolbox(object):
      def __init__(self):
@@ -119,42 +148,25 @@ class PullReplica(object):
           return
 
      def updateMessages(self, parameters):
-          if not checkService(parameters[0].value):
-               parameters[0].setErrorMessage("Service does not end in 'FeatureService")
+          if not check_service(parameters[0].value):
+               parameters[0].setErrorMessage("Service URL must end with 'FeatureServer'")
           return
 
      def execute(self, parameters, messages):
 
-          replicaQuery = {"geometry": '',
-               "geometryType": "esriGeometryEnvelope",
-               "inSR": '',
-               "layerQueries": '',
-               "layers": "0",
-               "replicaName": "read_only_rep",
-               "returnAttachments": 'false',
-               "returnAttachmentsDataByUrl": 'true',
-               "transportType": "esriTransportTypeEmbedded",
-               "async": 'false',
-               "syncModel": "none",
-               "dataFormat": "filegdb",
-               "token": '',
-               "replicaOptions": '',
-               "f": "json"}
-
-          inService = parameters[0].valueAsText
-          inUsername = parameters[1].valueAsText
-          inPassword = parameters[2].valueAsText
-          outDirectory = parameters[3].valueAsText
-          hasAttachments = parameters[4].valueAsText
+          in_service = parameters[0].valueAsText
+          in_username = parameters[1].valueAsText
+          in_password = parameters[2].valueAsText
+          out_directory = parameters[3].valueAsText
+          has_attachments = parameters[4].valueAsText
 
           try:
-               token = genToken(inUsername, inPassword)
-               replicaQuery['token'] = token
-               replicaQuery['returnAttachments'] = hasAttachments
-               createReplica(inService, replicaQuery, outDirectory)
+               token = login(in_username, in_password)
+               REPLICA['returnAttachments'] = has_attachments
+               pull_replica(in_service, REPLICA, token, out_directory)
 
           except KeyError as e:
                if e.message == 'token':
                     messages.addErrorMessage('The token cannot be obtained, check your credentials.')
           except ValueError:
-               messages.addErrorMessage('Check your feature service url again. {} is not working.'.format(inService))
+               messages.addErrorMessage('Check your feature service url again. {} is not working.'.format(in_service))
