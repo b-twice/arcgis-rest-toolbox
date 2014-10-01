@@ -7,22 +7,21 @@ import imghdr
 ### REST functions
 
 def check_service(service_url):
+    url_parts = {"fs_url": None, "layer_url":None, "layer_id":None}
     components = os.path.split(service_url)
     if service_url == None:
         return True
-    elif components[-1].isdigit() :
-        return "Layer"
-    elif components[-1] == "FeatureServer":
-        return "FeatureServer"
+    elif components[1].isdigit() :
+        url_parts["fs_url"] = components[0]
+        url_parts["layer_url"] = service_url
+        url_parts["layer_id"] = str(components[1])
+        return url_parts
+    elif components[1] == "FeatureServer":
+        url_parts["fs_url"] = service_url
+        return url_parts
     else:
         return False
 
-def get_service_url(layer_url):
-    components = os.path.split(layer_url)
-    if components[1] == "FeatureServer":
-        return layer_url
-    else:
-        return components[0]
 
 def get_response(url, query='', get_json=True):
     encoded = urllib.urlencode(query)
@@ -46,7 +45,7 @@ def login (username, password):
 
 def get_fs_name(input_url, token):
     return get_response(input_url,
-        {'f':'json', 'token':token})['layers'][0]['name']
+        {'f':'json', 'token':token})['layers']
 
 def query_id_or_field(url, query, field=None):
     if field:
@@ -125,20 +124,20 @@ class App(object):
         self.input_url = input_url
         self.token = token
         self.destination = destination
-        self.fs_url = get_service_url(input_url)
         self.layer_url = None
+        self.layer_id = None
+        self.fs_url = self.check_input_url()
 
     def check_input_url(self):
-        input_type = check_service(self.input_url)
-        if input_type == "Layer":
-            self.layer_url = self.input_url
-        if input_type == "FeatureServer":
-            self.layer_url = add_path(self.input_url, "0/query")
-
+        url_parts = check_service(self.input_url)
+        self.layer_url = url_parts["layer_url"]
+        self.layer_id = url_parts["layer_id"]
+        if not self.layer_url:
+            self.layer_url = add_path(url_parts["fs_url"], "0")
+        return url_parts["fs_url"]
 
     def pull_attachments(self, query, field=None):
         query['token'] = self.token
-        self.check_input_url()
         feature_ids = query_id_or_field(self.layer_url, query, field)
         os.chdir(self.destination)
         root_name = time.strftime("%Y_%m_%d_") + get_fs_name(self.input_url,
@@ -161,14 +160,22 @@ class App(object):
                         '', 'jpg')
         group_photos(root_file, "ALL")
 
-    def pull_replica(self, query):
-        query['token'] = self.token
-        replica_url = add_path(self.fs_url, "createReplica")
+    def replicate(self, query, layer):
+        replica_url = add_path(self.fs_url, 'createReplica')
         zip_url = get_response(replica_url, query)['responseUrl']
         zip_file = get_response(zip_url, get_json=False)
-        file_name = time.strftime("%Y_%m_%d_") + get_fs_name(self.token,
-            self.fs_url)
+        file_name = time.strftime("%Y_%m_%d_") + layer['name']
         pull_to_local(zip_file, file_name, self.destination, 'zip')
+
+
+    def pull_replica(self, query):
+        query['token'] = self.token
+        layers = get_fs_name(self.fs_url, self.token)
+        if self.layer_id:
+            self.replicate(query, layers[int(self.layer_id)])
+        else:
+            for layer in layers:
+                self.replicate(query, layer)
 
 
 if __name__ == "__main__":
@@ -177,5 +184,6 @@ if __name__ == "__main__":
     DEST = r""
     RUN = App(INPUT_URL, TOKEN, DEST)
     RUN.pull_replica(REPLICA)
-    RUN.pull_attachments(ATTACHMENTS)
+    # pull attachments not reworked yet for new logic
+    #RUN.pull_attachments(ATTACHMENTS)
 
