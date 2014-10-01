@@ -11,7 +11,8 @@ def check_service(service_url):
     components = os.path.split(service_url)
     if service_url == None:
         return True
-    elif components[1].isdigit() :
+    elif (components[1].isdigit() and os.path.split(components[0])[1] ==
+    "FeatureServer"):
         url_parts["fs_url"] = components[0]
         url_parts["layer_url"] = service_url
         url_parts["layer_id"] = str(components[1])
@@ -136,6 +137,8 @@ class App(object):
             self.layer_url = add_path(url_parts["fs_url"], "0")
         return url_parts["fs_url"]
 
+    def find_attachments(self, query):
+
     def pull_attachments(self, query, field=None):
         query['token'] = self.token
         feature_ids = query_id_or_field(self.layer_url, query, field)
@@ -181,9 +184,9 @@ class App(object):
 
 
 if __name__ == "__main__":
-    TOKEN = login("", "")
-    INPUT_URL = ""
-    DEST = r""
+    TOKEN = login("EEE_Consulting", "RVA1998")
+    INPUT_URL = "http://services1.arcgis.com/5ImGlDxIRoo9CfsW/arcgis/rest/services/Hellwig_Background/FeatureServer"
+    DEST = r"C:\Users\bbrown\Desktop\test"
     RUN = App(INPUT_URL, TOKEN, DEST)
     RUN.pull_replica(REPLICA)
     # pull attachments not reworked yet for new logic

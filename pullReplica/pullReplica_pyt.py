@@ -35,22 +35,53 @@ REPLICA = {
 
 
 def check_service(service_url):
+    url_parts = {"fs_url": None, "layer_url":None, "layer_id":None}
+    components = os.path.split(service_url)
     if service_url == None:
         return True
+    elif (components[1].isdigit() and os.path.split(components[0])[1] ==
+    "FeatureServer"):
+        url_parts["fs_url"] = components[0]
+        url_parts["layer_url"] = service_url
+        url_parts["layer_id"] = str(components[1])
+        return url_parts
+    elif components[1] == "FeatureServer":
+        url_parts["fs_url"] = service_url
+        return url_parts
     else:
-        if os.path.split(service_url)[-1] != "FeatureServer":
-            return False
-        return True
+        return False
 
-def get_response(url, query='', return_json=True):
-    encoded_query = urllib.urlencode(query)
-    request = urllib2.Request(url, encoded_query)
-    if return_json:
+
+def get_response(url, query='', get_json=True):
+    encoded = urllib.urlencode(query)
+    request = urllib2.Request(url, encoded)
+    if get_json:
         return json.loads(urllib2.urlopen(request).read())
     return urllib2.urlopen(request).read()
 
 def add_path(url, path):
     return urlparse.urljoin(url + "/", path)
+
+def login (username, password):
+    CREDENTIALS['username'] = username
+    CREDENTIALS['password'] = password
+    response = get_response(TOKEN_URL, CREDENTIALS)
+    if 'error' in response:
+        return response
+    else:
+        return response['token']
+
+def get_fs_name(input_url, token):
+    return get_response(input_url,
+        {'f':'json', 'token':token})['layers']
+
+### OS functions
+
+def create_and_set_dir(directory_name):
+    new_dir = os.path.join(os.getcwd(), directory_name)
+    os.makedirs(directory_name)
+    os.chdir(directory_name)
+    return new_dir
 
 def pull_to_local(url, name, destination, file_format = ''):
     if destination:
@@ -62,111 +93,124 @@ def pull_to_local(url, name, destination, file_format = ''):
     output.write(url)
     output.close()
 
-def login (username, password):
-    CREDENTIALS['username'] = username
-    CREDENTIALS['password'] = password
-    response = get_response(TOKEN_URL, CREDENTIALS)
-    if 'error' in response:
-        print response['error']
-        exit()
-    else:
-        return response['token']
+class App(object):
+    ''' Class with methods to perform tasks with ESRI's REST service '''
+    def __init__ (self, input_url, token, destination):
+        self.input_url = input_url
+        self.token = token
+        self.destination = destination
+        self.layer_url = None
+        self.layer_id = None
+        self.fs_url = self.check_input_url()
 
-def get_fs_name(input_url, token):
-    return get_response(input_url,
-        {'f':'json', 'token':token})['layers'][0]['name']
+    def check_input_url(self):
+        url_parts = check_service(self.input_url)
+        self.layer_url = url_parts["layer_url"]
+        self.layer_id = url_parts["layer_id"]
+        if not self.layer_url:
+            self.layer_url = add_path(url_parts["fs_url"], "0")
+        return url_parts["fs_url"]
 
-def pull_replica(fs_url, query, token, destination):
-    query['token'] = token
-    replica_url = add_path(fs_url, "createReplica")
-    zip_url = get_response(replica_url, query)['responseUrl']
-    zip_file = get_response(zip_url, return_json=False)
-    file_name = time.strftime("%Y_%m_%d_") + get_fs_name(fs_url, token)
-    pull_to_local(zip_file, file_name, destination, 'zip')
+    def replicate(self, query, layer):
+        replica_url = add_path(self.fs_url, 'createReplica')
+        zip_url = get_response(replica_url, query)['responseUrl']
+        zip_file = get_response(zip_url, get_json=False)
+        file_name = time.strftime("%Y_%m_%d_") + layer['name']
+        pull_to_local(zip_file, file_name, self.destination, 'zip')
 
+
+    def pull_replica(self, query):
+        query['token'] = self.token
+        layers = get_fs_name(self.fs_url, self.token)
+        if self.layer_id:
+            query['layers'] = self.layer_id
+            self.replicate(query, layers[int(self.layer_id)])
+        else:
+            for layer in layers:
+                query['layers'] = layer['id']
+                self.replicate(query, layer)
 
 class Toolbox(object):
-     def __init__(self):
-          self.label = "Create a Replica from a Feature Service"
-          self.alias = "feature service"
-          self.tools = [PullReplica]
+    def __init__(self):
+        self.label = "Replicate Feature Service"
+        self.alias = "Replicate Feature Service"
+        self.tools = [PullReplica]
 
 
 class PullReplica(object):
-     def __init__(self):
-          self.label = "Replicate Feature Service"
-          self.description = ''' Pull a feature service from ArcGIS Online
-                               into a zipped geodatabase. This preserves all
-                               domains and provides option forattachments.'''
-          self.canRunInBackground = True
+    def __init__(self):
+        self.label = "Replicate"
+        self.description = ''' Pull a feature service from ArcGIS Online
+                           into a zipped geodatabase.'''
+        self.canRunInBackground = True
 
-     def getParameterInfo(self):
-          in_service = arcpy.Parameter(
+    def getParameterInfo(self):
+        in_service = arcpy.Parameter(
             displayName = 'Input Feature Service URL',
             name = 'in_service',
-            datatype = 'GPString',
+            datatype = 'String',
             parameterType = 'Required',
             direction = 'Input')
 
-          in_username = arcpy.Parameter(
+        in_username = arcpy.Parameter(
             displayName = 'Input Username to ArcGIS Online Account',
             name = 'in_username',
-            datatype = 'GPString',
+            datatype = 'String',
             parameterType = 'Required',
             direction = 'Input')
 
-          in_password = arcpy.Parameter(
+        in_password = arcpy.Parameter(
             displayName = 'Input Password to ArcGIS Online Account',
             name = 'in_password',
-            datatype = 'GPString',
+            datatype = 'String',
             parameterType = 'Required',
             direction = 'Input')
 
-          out_directory = arcpy.Parameter(
+        out_directory = arcpy.Parameter(
             displayName = 'Output Directory',
             name = 'out_directory',
-            datatype = 'DEFolder',
+            datatype = 'String',
             parameterType = 'Required',
             direction = 'Input')
 
-          has_attachments = arcpy.Parameter(
+        has_attachments = arcpy.Parameter(
             displayName = 'Pull Attachments?',
             name = 'has_attachments',
-            datatype = 'GPBoolean',
-            parameterType = 'REquired',
+            datatype = 'Boolean',
+            parameterType = 'Required',
             direction = 'Input')
 
-          out_directory.filter.list = ['File System']
-          has_attachments.value = False
-          params = [in_service, in_username, in_password, out_directory, has_attachments]
-          return params
+        has_attachments.value = False
+        params = [in_service, in_username, in_password, out_directory, has_attachments]
+        return params
 
-     def isLicensed(self):
-          return True
+    def isLicensed(self):
+        return True
 
-     def updateParameters(self, parameters):
-          return
+    def updateParameters(self, parameters):
+        return
 
-     def updateMessages(self, parameters):
-          if not check_service(parameters[0].value):
-               parameters[0].setErrorMessage("Service URL must end with 'FeatureServer'")
-          return
+    def updateMessages(self, parameters):
+        return
 
-     def execute(self, parameters, messages):
+    def execute(self, parameters, messages):
+        in_service = parameters[0].valueAsText
+        in_username = parameters[1].valueAsText
+        in_password = parameters[2].valueAsText
+        out_directory = parameters[3].valueAsText
+        has_attachments = parameters[4].valueAsText
 
-          in_service = parameters[0].valueAsText
-          in_username = parameters[1].valueAsText
-          in_password = parameters[2].valueAsText
-          out_directory = parameters[3].valueAsText
-          has_attachments = parameters[4].valueAsText
+        try:
+            token = login(in_username, in_password)
+            if 'error' in token:
+                raise KeyError('token')
+            REPLICA['returnAttachments'] = has_attachments
+            run = App(in_service, token, out_directory)
+            run.pull_replica(REPLICA)
 
-          try:
-               token = login(in_username, in_password)
-               REPLICA['returnAttachments'] = has_attachments
-               pull_replica(in_service, REPLICA, token, out_directory)
+        except KeyError as e:
+            if e.message == 'token':
+                messages.addErrorMessage('The token cannot be obtained, check your credentials.')
+        except ValueError:
+            messages.addErrorMessage('Check your feature service url again. {} is not working.'.format(in_service))
 
-          except KeyError as e:
-               if e.message == 'token':
-                    messages.addErrorMessage('The token cannot be obtained, check your credentials.')
-          except ValueError:
-               messages.addErrorMessage('Check your feature service url again. {} is not working.'.format(in_service))
