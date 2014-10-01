@@ -104,7 +104,7 @@ REPLICA = {
     "geometryType": "esriGeometryEnvelope",
     "inSR": '',
     "layerQueries": '',
-    "layers": "0",
+    "layers": '0',
     "replicaName": "read_only_rep",
     "returnAttachments": 'false',
     "returnAttachmentsDataByUrl": 'true',
@@ -172,9 +172,11 @@ class App(object):
         query['token'] = self.token
         layers = get_fs_name(self.fs_url, self.token)
         if self.layer_id:
+            query['layers'] = self.layer_id
             self.replicate(query, layers[int(self.layer_id)])
         else:
             for layer in layers:
+                query['layers'] = layer['id']
                 self.replicate(query, layer)
 
 
