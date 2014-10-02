@@ -145,9 +145,11 @@ class App(object):
             self.layer_url = add_path(url_parts["fs_url"], "0")
         return url_parts["fs_url"]
 
+    def get_root_name(self):
+        return time.strftime("%Y_%m_%d_") + get_service_name(self.fs_url)
+
     def find_attachments(self, query, layer):
-        root_name = layer['name']
-        root_file = create_and_set_dir(root_name)
+        root_file = create_and_set_dir(layer['name'])
         layer_query = add_path(self.fs_url, layer['id'], 'query')
         feature_ids = query_id_or_field(layer_query, query)
         for feature in feature_ids:
@@ -171,9 +173,12 @@ class App(object):
         query['token'] = self.token
         os.chdir(self.destination)
         layers = get_base(self.fs_url, self.token)['layers']
-        service_name = time.strftime("%Y_%m_%d_") + get_service_name(self.fs_url) + "_Photos"
-        service_file = create_and_set_dir(service_name)
-        if self.layer_id and get_base(self.layer_url, self.token)['hasAttachments']:
+        root_name = self.get_root_name() + "_Photos"
+        if os.path.exists(root_name):
+            shutil.rmtree(root_name)
+        service_file = create_and_set_dir(root_name)
+        attachments = get_base(self.layer_url, self.token)['hasAttachments']
+        if self.layer_id and attachments:
             self.find_attachments(query, layers[int(self.layer_id)])
         else:
             for layer in layers:
@@ -185,8 +190,7 @@ class App(object):
         replica_url = add_path(self.fs_url, 'createReplica')
         zip_url = get_response(replica_url, query)['responseUrl']
         zip_file = get_response(zip_url, get_json=False)
-        file_name = time.strftime("%Y_%m_%d_") + layer['name']
-        pull_to_local(zip_file, file_name, self.destination, 'zip')
+        pull_to_local(zip_file, self.get_root_name(), self.destination, 'zip')
 
 
     def pull_replica(self, query):
@@ -196,10 +200,8 @@ class App(object):
             query['layers'] = self.layer_id
             self.replicate(query, layers[int(self.layer_id)])
         else:
-            for layer in layers:
-                query['layers'] = layer['id']
-                self.replicate(query, layer)
-
+            query['layers'] = [layer['id'] for layer in layers]
+            self.replicate(query, layer)
 
 if __name__ == "__main__":
     TOKEN = login("", "")
