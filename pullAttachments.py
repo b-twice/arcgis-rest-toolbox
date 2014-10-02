@@ -23,6 +23,12 @@ def check_service(service_url):
     else:
         return False
 
+def get_service_name(service_url):
+    components = os.path.split(service_url)
+    if components[1] == "FeatureServer":
+        return os.path.split(components[0])[1]
+    else:
+        get_service_name(components[0])
 
 def get_response(url, query='', get_json=True):
     encoded = urllib.urlencode(query)
@@ -44,7 +50,7 @@ def login (username, password):
     else:
         return response['token']
 
-def get_fs_name(input_url, token):
+def get_layers(input_url, token):
     return get_response(input_url,
         {'f':'json', 'token':token})['layers']
 
@@ -137,19 +143,15 @@ class App(object):
             self.layer_url = add_path(url_parts["fs_url"], "0")
         return url_parts["fs_url"]
 
-    def find_attachments(self, query):
-
-    def pull_attachments(self, query, field=None):
-        query['token'] = self.token
-        feature_ids = query_id_or_field(self.layer_url, query, field)
-        os.chdir(self.destination)
-        root_name = time.strftime("%Y_%m_%d_") + get_fs_name(self.input_url,
-            self.token) + "_Photos"
+    def find_attachments(self, query, layer):
+        root_name = time.strftime("%Y_%m_%d_") + layer['name'] + "_Photos"
         root_file = create_and_set_dir(root_name)
+        layer_query = add_path(self.fs_url, "{}/query".format(layer['id']))
+        feature_ids = query_id_or_field(layer_query, query)
         for feature in feature_ids:
             os.chdir(root_file)
             img_url = add_path(self.input_url,
-                "0/{}/attachments").format(feature)
+                "{}/{}/attachments").format(layer['id'], feature)
             attachments = get_response(img_url, query)['attachmentInfos']
             if len(attachments) > 0:
                 create_and_set_dir(str(feature))
@@ -163,6 +165,19 @@ class App(object):
                         '', 'jpg')
         group_photos(root_file, "ALL")
 
+    def pull_attachments(self, query):
+        query['token'] = self.token
+        os.chdir(self.destination)
+        layers = get_layers(self.fs_url, self.token)
+        if self.layer_id:
+            self.find_attachments(query, layers[self.layer_id])
+        else:
+            service_name = get_service_name(self.fs_url)
+            create_and_set_dir(service_name)
+            for layer in layers:
+                os.chdir(service_name)
+                self.find_attachments(query, layer)
+
     def replicate(self, query, layer):
         replica_url = add_path(self.fs_url, 'createReplica')
         zip_url = get_response(replica_url, query)['responseUrl']
@@ -173,7 +188,7 @@ class App(object):
 
     def pull_replica(self, query):
         query['token'] = self.token
-        layers = get_fs_name(self.fs_url, self.token)
+        layers = get_layers(self.fs_url, self.token)
         if self.layer_id:
             query['layers'] = self.layer_id
             self.replicate(query, layers[int(self.layer_id)])
@@ -184,11 +199,11 @@ class App(object):
 
 
 if __name__ == "__main__":
-    TOKEN = login("EEE_Consulting", "RVA1998")
-    INPUT_URL = "http://services1.arcgis.com/5ImGlDxIRoo9CfsW/arcgis/rest/services/Hellwig_Background/FeatureServer"
-    DEST = r"C:\Users\bbrown\Desktop\test"
+    TOKEN = login("", "")
+    INPUT_URL = ""
+    DEST = r""
     RUN = App(INPUT_URL, TOKEN, DEST)
-    RUN.pull_replica(REPLICA)
+    #RUN.pull_replica(REPLICA)
     # pull attachments not reworked yet for new logic
-    #RUN.pull_attachments(ATTACHMENTS)
+    RUN.pull_attachments(ATTACHMENTS)
 
