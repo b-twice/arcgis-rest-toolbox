@@ -52,7 +52,7 @@ def login (username, password):
     else:
         return response['token']
 
-def get_base(input_url, token):
+def get_service_info(input_url, token):
     return get_response(input_url,
         {'f':'json', 'token':token})
 
@@ -75,7 +75,7 @@ def pull_to_local(url, name, destination, file_format = ''):
     if destination:
         os.chdir(destination)
     if format:
-        output = open(str(name) + '.{}'.format(file_format), 'wb')
+        output = open(str(name) + '.%s'%file_format, 'wb')
     else:
         output = open(str(name), 'wb')
     output.write(url)
@@ -85,9 +85,10 @@ def group_photos(root_directory, new_directory):
     os.chdir(root_directory)
     photos = [(os.path.join(directory, filename), filename) for directory,
               dirnames, files in os.walk(root_directory) for filename in files if imghdr.what(os.path.join(directory,filename))]
-    directory_path = create_and_set_dir(new_directory)
-    for photo in photos:
-        shutil.copy2(photo[0], os.path.join(directory_path, photo[1]))
+    if len(photos) > 0:
+        directory_path = create_and_set_dir(new_directory)
+        for photo in photos:
+            shutil.copy2(photo[0], os.path.join(directory_path, photo[1]))
 
 ### Queries
 
@@ -172,21 +173,23 @@ class App(object):
     def pull_attachments(self, query):
         query['token'] = self.token
         os.chdir(self.destination)
-        layers = get_base(self.fs_url, self.token)['layers']
+        layers = get_service_info(self.fs_url, self.token)['layers']
         root_name = self.get_root_name() + "_Photos"
         if os.path.exists(root_name):
             shutil.rmtree(root_name)
         service_file = create_and_set_dir(root_name)
-        attachments = get_base(self.layer_url, self.token)['hasAttachments']
+        attachments = get_service_info(self.layer_url,
+            self.token)['hasAttachments']
         if self.layer_id and attachments:
             self.find_attachments(query, layers[int(self.layer_id)])
         else:
             for layer in layers:
-                if get_base(add_path(self.fs_url, layer['id']), self.token)['hasAttachments']:
+                if get_service_info(add_path(self.fs_url, layer['id']),
+                    self.token)['hasAttachments']:
                     os.chdir(service_file)
                     self.find_attachments(query, layer)
 
-    def replicate(self, query, layer):
+    def replicate(self, query):
         replica_url = add_path(self.fs_url, 'createReplica')
         zip_url = get_response(replica_url, query)['responseUrl']
         zip_file = get_response(zip_url, get_json=False)
@@ -195,13 +198,13 @@ class App(object):
 
     def pull_replica(self, query):
         query['token'] = self.token
-        layers = get_base(self.fs_url, self.token)['layers']
+        layers = get_service_info(self.fs_url, self.token)['layers']
         if self.layer_id:
             query['layers'] = self.layer_id
-            self.replicate(query, layers[int(self.layer_id)])
+            self.replicate(query)
         else:
             query['layers'] = [layer['id'] for layer in layers]
-            self.replicate(query, layer)
+            self.replicate(query)
 
 if __name__ == "__main__":
     TOKEN = login("", "")
