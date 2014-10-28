@@ -2,6 +2,7 @@ import json, urllib, urllib2, urlparse
 import os, shutil
 import time
 import imghdr
+import re
 
 
 ### REST functions
@@ -28,13 +29,18 @@ def get_service_name(service_url):
     if components[1] == "FeatureServer":
         return os.path.split(components[0])[1]
     else:
-        get_service_name(components[0])
+        return get_service_name(components[0])
 
 def get_response(url, query='', get_json=True):
     encoded = urllib.urlencode(query)
     request = urllib2.Request(url, encoded)
     if get_json:
-        return json.loads(urllib2.urlopen(request).read())
+        json_response = json.loads(urllib2.urlopen(request).read())
+        if 'error' in json_response:
+            print json_response
+            exit()
+        else:
+            return json_response
     return urllib2.urlopen(request).read()
 
 def add_path(url, *args):
@@ -46,11 +52,7 @@ def login (username, password):
     CREDENTIALS['username'] = username
     CREDENTIALS['password'] = password
     response = get_response(TOKEN_URL, CREDENTIALS)
-    if 'error' in response:
-        print response['error']
-        exit()
-    else:
-        return response['token']
+    return response['token']
 
 def get_service_info(input_url, token):
     return get_response(input_url,
@@ -58,26 +60,35 @@ def get_service_info(input_url, token):
 
 def query_id_or_field(url, query, field=None):
     if field:
+        query['returnIdsOnly'] = 'false'
         query['outFields'] = field
-        return get_response(url, query)['features']
+        attributes= get_response(url, query)['features'][0]['attributes']
+        if field in attributes:
+            field_attribute = attributes[field]
+            if field_attribute:
+                return str(field_attribute)
     query['returnIdsOnly'] = 'true'
-    return get_response(url, query)['objectIds']
+    return str(get_response(url, query)['objectIds'][0])
 
 ### OS functions
 
-def create_and_set_dir(directory_name):
-    new_dir = os.path.join(os.getcwd(), directory_name)
-    os.makedirs(directory_name)
-    os.chdir(directory_name)
+def create_and_set_dir(directory_name, optional_id=0):
+    valid_directory = re.sub('[^\w\-_\. \(\)]', '_', directory_name)
+    while os.path.exists(valid_directory):
+        valid_directory = "{0} ({1})".format(directory_name, optional_id)
+        optional_id += 1
+    new_dir = os.path.join(os.getcwd(), valid_directory)
+    os.makedirs(valid_directory)
+    os.chdir(valid_directory)
     return new_dir
 
 def pull_to_local(url, name, destination, file_format = ''):
     if destination:
         os.chdir(destination)
-    if format:
-        output = open(str(name) + '.%s'%file_format, 'wb')
+    if file_format:
+        output = open('{0}.{1}'.format(name,file_format), 'wb')
     else:
-        output = open(str(name), 'wb')
+        output = open(name, 'wb')
     output.write(url)
     output.close()
 
@@ -95,7 +106,7 @@ def group_photos(root_directory, new_directory):
 CREDENTIALS = {
     'username': '',
     'password': '',
-    'expiration': '60',
+    'expiration': '300',
     'client': 'referer',
     'referer': 'www.arcgis.com',
     'f': 'json'
@@ -106,7 +117,8 @@ TOKEN_URL = "https://www.arcgis.com/sharing/rest/generateToken"
 ATTACHMENTS = {
     'where': '1=1',
     'token': '',
-    'f': 'json'
+    'f': 'json',
+    'returnGeometry':'false'
 }
 
 REPLICA = {
@@ -149,28 +161,31 @@ class App(object):
     def get_root_name(self):
         return time.strftime("%Y_%m_%d_") + get_service_name(self.fs_url)
 
-    def find_attachments(self, query, layer):
+    def find_attachments(self, query, layer, field):
         root_file = create_and_set_dir(layer['name'])
         layer_query = add_path(self.fs_url, layer['id'], 'query')
-        feature_ids = query_id_or_field(layer_query, query)
+        query['returnIdsOnly'] = 'true'
+        feature_ids = get_response(layer_query, query)['objectIds']
         for feature in feature_ids:
-            os.chdir(root_file)
-            img_url = add_path(self.fs_url, layer['id'], feature,
-                'attachments')
-            attachments = get_response(img_url, query)['attachmentInfos']
-            if len(attachments) > 0:
-                create_and_set_dir(str(feature))
-                for attachment in attachments:
-                    attachment_url = add_path(img_url, attachment['id'],
-                        'download')
-                    attachment_file = get_response(attachment_url,
-                        {'token':self.token},
-                        get_json = False)
-                    pull_to_local(attachment_file, attachment['id'],
-                        '', 'jpg')
+                os.chdir(root_file)
+                img_url = add_path(self.fs_url, layer['id'], feature,
+                    'attachments')
+                query['objectIds'] = feature
+                attachments = get_response(img_url,query)['attachmentInfos']
+                if len(attachments) > 0:
+                    feature_name = query_id_or_field(layer_query, query, field)
+                    create_and_set_dir(feature_name, feature)
+                    for attachment in attachments:
+                        attachment_url = add_path(img_url, attachment['id'],
+                            'download')
+                        attachment_file = get_response(attachment_url,
+                            {'token':self.token},
+                            get_json = False)
+                        pull_to_local(attachment_file, attachment['id'],
+                            '', 'jpg')
         group_photos(root_file, "ALL")
 
-    def pull_attachments(self, query):
+    def pull_attachments(self, query, field):
         query['token'] = self.token
         os.chdir(self.destination)
         layers = get_service_info(self.fs_url, self.token)['layers']
@@ -181,13 +196,13 @@ class App(object):
         attachments = get_service_info(self.layer_url,
             self.token)['hasAttachments']
         if self.layer_id and attachments:
-            self.find_attachments(query, layers[int(self.layer_id)])
+            self.find_attachments(query, layers[int(self.layer_id)], field)
         else:
             for layer in layers:
                 if get_service_info(add_path(self.fs_url, layer['id']),
                     self.token)['hasAttachments']:
                     os.chdir(service_file)
-                    self.find_attachments(query, layer)
+                    self.find_attachments(query, layer, field)
 
     def replicate(self, query):
         replica_url = add_path(self.fs_url, 'createReplica')
@@ -207,10 +222,11 @@ class App(object):
             self.replicate(query)
 
 if __name__ == "__main__":
-    TOKEN = login("", "")
-    INPUT_URL = ""
-    DEST = r""
+    TOKEN = login("<username>", "<password>")
+    INPUT_URL = "<service_url>"
+    DEST = r"<local_destination>"
+    FIELD = "<optional_field>"
     RUN = App(INPUT_URL, TOKEN, DEST)
     RUN.pull_replica(REPLICA)
-    RUN.pull_attachments(ATTACHMENTS)
+    RUN.pull_attachments(ATTACHMENTS, FIELD)
 
