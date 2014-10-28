@@ -1,7 +1,6 @@
-Various python scripts that can be imported into ArcGIS
-as a python toolbox. NOTE - python toolboxes were introduced
-in ArcGIS 10.1. You must create a python toolbox, not
-your standard toolbox, for this to run.
+Toolbox for working with the ArcGIS Rest Service for ArcGIS Online. Run restservices.py (compatible with Python 2.6+) from python or port restservices_toolbox over into a python toolbox (introduced in ArcGIS 10.1) and run from there.
+
+Functionality includes:
 
 **Pull Replica**
 
@@ -14,17 +13,10 @@ pull the attachments or not (defaults to no attachments).
 
 
 **Get Attachments**
-###### TODO
-+ Handle OS functionality for overwriting
-+ Look into optional field for naming
-+ roll into python toolbox
-
 ~~~~~~
-
 
 Interact with Feature Service to pull any photo attachments
 stored in features. Builds a local directory as follows:
-
 
 Photos -->
     [Feature Name] -->
@@ -33,6 +25,8 @@ Photos -->
 
 Requires path to feature service, account login, and, optional,
 an attribute field to name features.
+
+If the attribute field is empty, then defaults to globalid.
 
 ~~~~~~
 Please provide any feedback or improvements to the code.
