@@ -178,11 +178,14 @@ class App(object):
                     for attachment in attachments:
                         attachment_url = add_path(img_url, attachment['id'],
                             'download')
-                        attachment_file = get_response(attachment_url,
-                            {'token':self.token},
-                            get_json = False)
-                        pull_to_local(attachment_file, attachment['id'],
-                            '', 'jpg')
+                        try:
+                            attachment_file = get_response(attachment_url,
+                                {'token':self.token},
+                                get_json = False)
+                            pull_to_local(attachment_file, attachment['id'],
+                                '', 'jpg')
+                        except urllib2.HTTPError:
+                            raise urllib2.HTTPError('httperror')
         group_photos(root_file, "ALL")
 
     def pull_attachments(self, query, field):
@@ -379,3 +382,6 @@ class PullAttachments(object):
                 messages.addErrorMessage('The token cannot be obtained, check your credentials.')
         except ValueError:
             messages.addErrorMessage('Check your feature service url again. {0} is not working.'.format(in_service))
+        except urllib2.HTTPError as e:
+            if e.message == 'httperror':
+                messages.addMessage('The attachment could not be downloaded')

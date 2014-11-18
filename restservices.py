@@ -178,11 +178,14 @@ class App(object):
                     for attachment in attachments:
                         attachment_url = add_path(img_url, attachment['id'],
                             'download')
-                        attachment_file = get_response(attachment_url,
-                            {'token':self.token},
-                            get_json = False)
-                        pull_to_local(attachment_file, attachment['id'],
-                            '', 'jpg')
+                        try:
+                            attachment_file = get_response(attachment_url,
+                                {'token':self.token},
+                                get_json = False)
+                            pull_to_local(attachment_file, attachment['id'],
+                                '', 'jpg')
+                        except urllib2.HTTPError:
+                            print "HTTP Error: {} could not be downloaded.".format(attachment_url)
         group_photos(root_file, "ALL")
 
     def pull_attachments(self, query, field):
