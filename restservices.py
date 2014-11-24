@@ -3,9 +3,9 @@ import os, shutil
 import time
 import imghdr
 import re
+import csv
 
-
-### REST functions
+### REST FUNCTIONS
 
 def check_service(service_url):
     url_parts = {"fs_url": None, "layer_url":None, "layer_id":None}
@@ -70,7 +70,7 @@ def query_id_or_field(url, query, field=None):
     query['returnIdsOnly'] = 'true'
     return str(get_response(url, query)['objectIds'][0])
 
-### OS functions
+### OS FUNCTIONS
 
 def create_and_set_dir(directory_name, optional_id=0):
     valid_directory = re.sub('[^\w\-_\. \(\)]', '_', directory_name)
@@ -101,7 +101,18 @@ def group_photos(root_directory, new_directory):
         for photo in photos:
             shutil.copy2(photo[0], os.path.join(directory_path, photo[1]))
 
-### Queries
+def csv_to_json(data):
+    update_array = []
+    with open(data) as csv_data:
+        for i,row in enumerate(csv.DictReader(csv_data)):
+            update_array.append(dict(
+                attributes = dict()))
+            for key in row.keys():
+                update_array[i]["attributes"][key] = row[key]
+    return update_array
+
+
+### QUERIES
 
 CREDENTIALS = {
     'username': '',
@@ -139,9 +150,16 @@ REPLICA = {
     "f": "json"
 }
 
+UPDATES = {
+    "f": "json",
+    "features": '',
+    "rollbackOnFailure":True
+
+}
+
 
 class App(object):
-    ''' Class with methods to perform tasks with ESRI's REST service '''
+    ''' Class with methods to perform tasks with ESRI's REST API '''
     def __init__ (self, input_url, token, destination):
         self.input_url = input_url
         self.token = token
@@ -178,11 +196,14 @@ class App(object):
                     for attachment in attachments:
                         attachment_url = add_path(img_url, attachment['id'],
                             'download')
-                        attachment_file = get_response(attachment_url,
-                            {'token':self.token},
-                            get_json = False)
-                        pull_to_local(attachment_file, attachment['id'],
-                            '', 'jpg')
+                        try:
+                            attachment_file = get_response(attachment_url,
+                                {'token':self.token},
+                                get_json = False)
+                            pull_to_local(attachment_file, attachment['id'],
+                                '', 'jpg')
+                        except urllib2.HTTPError:
+                            print "HTTP Error: {} could not be downloaded.".format(attachment_url)
         group_photos(root_file, "ALL")
 
     def pull_attachments(self, query, field):
@@ -221,12 +242,20 @@ class App(object):
             query['layers'] = [layer['id'] for layer in layers]
             self.replicate(query)
 
+    def update_service(self, query, update_table):
+        update_url = add_path(self.layer_url, 'updateFeatures')
+        query["features"] = csv_to_json(update_table)
+        query['token'] = self.token
+        get_response(update_url, query)
+
 if __name__ == "__main__":
     TOKEN = login("<username>", "<password>")
     INPUT_URL = "<service_url>"
     DEST = r"<local_destination>"
     FIELD = "<optional_field>"
+    UPDATE_TABLE = "<table to update service>"
     RUN = App(INPUT_URL, TOKEN, DEST)
-    RUN.pull_replica(REPLICA)
-    RUN.pull_attachments(ATTACHMENTS, FIELD)
+    # RUN.pull_replica(REPLICA)
+    # RUN.pull_attachments(ATTACHMENTS, FIELD)
+    # RUN.update_service(UPDATES, UPDATE_TABLE)
 

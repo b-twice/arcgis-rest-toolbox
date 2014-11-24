@@ -3,9 +3,10 @@ import os, shutil
 import time
 import imghdr
 import re
+import csv
 import arcpy
 
-### REST functions
+### REST FUNCTIONS
 
 def check_service(service_url):
     url_parts = {"fs_url": None, "layer_url":None, "layer_id":None}
@@ -70,7 +71,7 @@ def query_id_or_field(url, query, field=None):
     query['returnIdsOnly'] = 'true'
     return str(get_response(url, query)['objectIds'][0])
 
-### OS functions
+### OS FUNCTIONS
 
 def create_and_set_dir(directory_name, optional_id=0):
     valid_directory = re.sub('[^\w\-_\. \(\)]', '_', directory_name)
@@ -101,7 +102,18 @@ def group_photos(root_directory, new_directory):
         for photo in photos:
             shutil.copy2(photo[0], os.path.join(directory_path, photo[1]))
 
-### Queries
+def csv_to_json(data):
+    update_array = []
+    with open(data) as csv_data:
+        for i,row in enumerate(csv.DictReader(csv_data)):
+            update_array.append(dict(
+                attributes = dict()))
+            for key in row.keys():
+                update_array[i]["attributes"][key] = row[key]
+    return update_array
+
+
+### QUERIES
 
 CREDENTIALS = {
     'username': '',
@@ -139,9 +151,16 @@ REPLICA = {
     "f": "json"
 }
 
+UPDATES = {
+    "f": "json",
+    "features": '',
+    "rollbackOnFailure":True
+
+}
+
 
 class App(object):
-    ''' Class with methods to perform tasks with ESRI's REST service '''
+    ''' Class with methods to perform tasks with ESRI's REST API '''
     def __init__ (self, input_url, token, destination):
         self.input_url = input_url
         self.token = token
@@ -178,11 +197,14 @@ class App(object):
                     for attachment in attachments:
                         attachment_url = add_path(img_url, attachment['id'],
                             'download')
-                        attachment_file = get_response(attachment_url,
-                            {'token':self.token},
-                            get_json = False)
-                        pull_to_local(attachment_file, attachment['id'],
-                            '', 'jpg')
+                        try:
+                            attachment_file = get_response(attachment_url,
+                                {'token':self.token},
+                                get_json = False)
+                            pull_to_local(attachment_file, attachment['id'],
+                                '', 'jpg')
+                        except urllib2.HTTPError:
+                            print "HTTP Error: {} could not be downloaded.".format(attachment_url)
         group_photos(root_file, "ALL")
 
     def pull_attachments(self, query, field):
@@ -221,11 +243,17 @@ class App(object):
             query['layers'] = [layer['id'] for layer in layers]
             self.replicate(query)
 
+    def update_service(self, query, update_table):
+        update_url = add_path(self.layer_url, 'updateFeatures')
+        query["features"] = csv_to_json(update_table)
+        query['token'] = self.token
+        get_response(update_url, query)
+
 class Toolbox(object):
     def __init__(self):
         self.label = "ArcGIS REST API Toolbox"
         self.alias = "Tools to interacte with the ArcGIS REST API"
-        self.tools = [Replicate, PullAttachments]
+        self.tools = [Replicate, PullAttachments, UpdateService]
 
 
 class Replicate(object):
@@ -373,6 +401,80 @@ class PullAttachments(object):
                 raise KeyError('token')
             run = App(in_service, token, out_directory)
             run.pull_attachments(ATTACHMENTS, in_field)
+
+        except KeyError as e:
+            if e.message == 'token':
+                messages.addErrorMessage('The token cannot be obtained, check your credentials.')
+        except ValueError:
+            messages.addErrorMessage('Check your feature service url again. {0} is not working.'.format(in_service))
+
+        except urllib2.HTTPError as e:
+            if e.message == 'httperror':
+                messages.addMessage('The attachment could not be downloaded')
+
+class UpdateService(object):
+    def __init__(self):
+        self.label = "Update Service"
+        self.description = ''' Update records in a Feature Service.'''
+        self.canRunInBackground = True
+
+    def getParameterInfo(self):
+        in_service = arcpy.Parameter(
+            displayName = 'Input Feature Service URL',
+            name = 'in_service',
+            datatype = 'GPString',
+            parameterType = 'Required',
+            direction = 'Input')
+
+        in_username = arcpy.Parameter(
+            displayName = 'Input Username to ArcGIS Online Account',
+            name = 'in_username',
+            datatype = 'GPString',
+            parameterType = 'Required',
+            direction = 'Input')
+
+        in_password = arcpy.Parameter(
+            displayName = 'Input Password to ArcGIS Online Account',
+            name = 'in_password',
+            datatype = 'GPString',
+            parameterType = 'Required',
+            direction = 'Input')
+
+        in_csv = arcpy.Parameter(
+            displayName = 'Input CSV of records to update',
+            name = 'in_csv',
+            datatype = 'DEFile',
+            parameterType = 'Required',
+            direction = 'Input')
+
+        params = [
+            in_service,
+            in_username,
+            in_password,
+            in_csv]
+        return params
+
+    def isLicensed(self):
+        return True
+
+    def updateParameters(self, parameters):
+        return
+
+    def updateMessages(self, parameters):
+        return
+
+    def execute(self, parameters, messages):
+        in_service = parameters[0].valueAsText
+        in_username = parameters[1].valueAsText
+        in_password = parameters[2].valueAsText
+        in_csv = parameters[3].valueAsText
+
+        try:
+            token = login(in_username, in_password)
+            if 'error' in token:
+                raise KeyError('token')
+            run = App(in_service, token, "")
+            run.update_service(UPDATES, in_csv)
 
         except KeyError as e:
             if e.message == 'token':
