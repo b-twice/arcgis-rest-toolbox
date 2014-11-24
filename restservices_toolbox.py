@@ -204,11 +204,7 @@ class App(object):
                             pull_to_local(attachment_file, attachment['id'],
                                 '', 'jpg')
                         except urllib2.HTTPError:
-<<<<<<< HEAD
-                            print "HTTP Error: {} could not be downloaded.".format(attachment_url)
-=======
                             raise urllib2.HTTPError('httperror')
->>>>>>> d4d3d4110323c10ca6010f5ab1d19ad10151fdcf
         group_photos(root_file, "ALL")
 
     def pull_attachments(self, query, field):

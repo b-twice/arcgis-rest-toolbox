@@ -13,7 +13,6 @@ pull the attachments or not (defaults to no attachments).
 
 
 **Get Attachments**
-~~~~~~
 
 Interact with Feature Service to pull any photo attachments
 stored in features. Builds a local directory as follows:
@@ -28,5 +27,9 @@ an attribute field to name features.
 
 If the attribute field is empty, then defaults to globalid.
 
-~~~~~~
+**Update Service**
+
+Update records in a feature layer with changes in a CSV table. Useful for providing batch updates a field or fields in a feature layer without having to pull the feature service down and republish.
+
+
 Please provide any feedback or improvements to the code.
