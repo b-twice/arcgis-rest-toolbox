@@ -29,7 +29,7 @@ If the attribute field is empty then [Feature Name] will be labeled the correspo
 
 Update records in a feature layer with changes in a CSV table. Useful for providing batch updates a field or fields in a feature layer without having to pull the feature service down and republish.
 
-##### A Note on Attachments and Exif Metadata
+### A Note on Attachments and Exif Metadata
 
 All metadata is carried through no matter what method you use to pull down attachments, either through exporting to a geodatabase or pulling attachments with this tool.
 
