@@ -82,14 +82,14 @@ def create_and_set_dir(directory_name, optional_id=0):
     os.chdir(valid_directory)
     return new_dir
 
-def pull_to_local(url, name, destination, file_format = ''):
+def pull_to_local(attachment, name, destination, file_format = ''):
     if destination:
         os.chdir(destination)
     if file_format:
         output = open('{0}.{1}'.format(name,file_format), 'wb')
     else:
         output = open(name, 'wb')
-    output.write(url)
+    output.write(attachment)
     output.close()
 
 def group_photos(root_directory, new_directory):
@@ -249,13 +249,26 @@ class App(object):
         get_response(update_url, query)
 
 if __name__ == "__main__":
+
+    ## Required
     TOKEN = login("<username>", "<password>")
     INPUT_URL = "<service_url>"
+
+    ## Required for Pull Attachments and Pull Replica
     DEST = r"<local_destination>"
-    FIELD = "<optional_field>"
+
+    ## Required for Update Service
     UPDATE_TABLE = "<table to update service>"
+
+    ## Optional field to label folders by attributes for Pull Attachments
+    FIELD = ""
+
+    ## To return attachments in the geodatabase for replicate uncomment the line as follows:
+    ## REPLICA[returnAttachments] = true
+
     RUN = App(INPUT_URL, TOKEN, DEST)
-    # RUN.pull_replica(REPLICA)
-    # RUN.pull_attachments(ATTACHMENTS, FIELD)
-    # RUN.update_service(UPDATES, UPDATE_TABLE)
+    RUN.pull_replica(REPLICA)
+    RUN.pull_attachments(ATTACHMENTS, FIELD)
+    RUN.update_service(UPDATES, UPDATE_TABLE)
+
 
