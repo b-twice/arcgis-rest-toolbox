@@ -1,6 +1,6 @@
 ## Rest Service Toolbox
 
-Toolbox for working with the ArcGIS Rest Service for ArcGIS Online. Run restservices.py (compatible with Python 2.6+) from python or port restservices_toolbox over into a python toolbox (introduced in ArcGIS 10.1) and run from there.
+Toolbox for working with ArcGIS's Rest Service in tandum with ArcGIS Online. Run restservices.py (compatible with Python 2.6 - 2.7) from python or port restservices_toolbox over into a python toolbox (introduced in ArcGIS 10.1) and run from there.
 
 Functionality includes:
 
@@ -8,11 +8,16 @@ Functionality includes:
 
 Simple tool to pull feature services from ArcGIS Online into a zipped
 geodatabase, preserving domain values.
-Provides the option to pull attachments or not (which is not provided in AGO when exporting a FS to a geodatabase).
+
+Provides the option to pull attachments or not.
+
+**NOTE** - As of the latter half of 2014, this functionality is now implemented in the directory of a feature service. However, this tool can serve as a convenience function and as a saner method for dating and tracking your downloads.
+
+Read more about how to do this over in the [API](http://services.arcgis.com/help/fsCreateReplica.html)
 
 ### Pull Attachments
 
-Interact with Feature Service to pull any photo attachments
+Interact with a Feature Service to pull any photo attachments
 stored in features. Builds a local directory as follows:
 
 Photos -->
@@ -33,8 +38,8 @@ Update records in a feature layer with changes in a CSV table. Useful for provid
 
 All metadata is carried through no matter what method you use to pull down attachments, either through exporting to a geodatabase or pulling attachments with this tool.
 
-However, if you are using one of Esri's mobile app, such as Collector or the "Green" App, and you are adding an attachment with a photo taken from within the app to a feature service with attachments enabled, no metadata will be added.
+However, if you are using one of Esri's mobile app, such as Collector or the "Green" App, and you are adding a photo taken from within the app to a feature service, no metadata will be added.
 
-If you experience anything otherwise, notify and I will look into.
+If you experience anything otherwise, notify me and I will look into.
 
 Please provide any feedback or improvements to the code.
