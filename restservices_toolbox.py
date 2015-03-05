@@ -224,6 +224,7 @@ class App(object):
                 if get_service_info(add_path(self.fs_url, layer['id']),
                     self.token)['hasAttachments']:
                     os.chdir(service_file)
+                    query['objectIds'] = ''
                     self.find_attachments(query, layer, field)
 
     def replicate(self, query):
