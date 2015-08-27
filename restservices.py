@@ -139,10 +139,10 @@ REPLICA = {
     "layerQueries": '',
     "layers": '0',
     "replicaName": "read_only_rep",
-    "returnAttachments": 'false',
+    "returnAttachments": False,
     "returnAttachmentsDataByUrl": 'true',
     "transportType": "esriTransportTypeEmbedded",
-    "async": 'false',
+    "async": False,
     "syncModel": "none",
     "dataFormat": "filegdb",
     "token": '',
@@ -228,7 +228,16 @@ class App(object):
 
     def replicate(self, query):
         replica_url = add_path(self.fs_url, 'createReplica')
-        zip_url = get_response(replica_url, query)['responseUrl']
+        if REPLICA["async"]:
+            status_url = get_response(replica_url, query)["statusUrl"]
+            query = {'f':'json', 'token':self.token}
+            complete = get_response(status_url, query)['status']
+            while complete not in ['Completed', 'CompletedWithErrors']:
+                time.sleep(30)
+                complete = get_response(status_url, query)['status']
+            zip_url = get_response(status_url, query)['resultUrl']
+        else:
+            zip_url = get_response(replica_url, query)['responseUrl']
         zip_file = get_response(zip_url, get_json=False)
         pull_to_local(zip_file, self.get_root_name(), self.destination, 'zip')
 
@@ -256,20 +265,23 @@ if __name__ == "__main__":
     INPUT_URL = "<service_url>"
 
     ## Required for Pull Attachments and Pull Replica
-    DEST = r"<local_destination>"
+    DEST = r"<local_directory>"
 
     ## Required for Update Service
     UPDATE_TABLE = "<table to update service>"
 
     ## Optional field to label folders by attributes for Pull Attachments
-    FIELD = ""
+    FIELD = "<field_name>"
 
-    ## To return attachments in the geodatabase for replicate uncomment the line as follows:
-    ## REPLICA[returnAttachments] = true
+    ## Set Async to True for Replicating large files
+    # REPLICA["async"] = True
+
+    ## Uncomment below to return attachments in the geodatabase
+    ## REPLICA[returnAttachments] = True
 
     RUN = App(INPUT_URL, TOKEN, DEST)
-    RUN.pull_replica(REPLICA)
-    RUN.pull_attachments(ATTACHMENTS, FIELD)
-    RUN.update_service(UPDATES, UPDATE_TABLE)
+    # RUN.pull_replica(REPLICA)
+    # RUN.pull_attachments(ATTACHMENTS, FIELD)
+    # RUN.update_service(UPDATES, UPDATE_TABLE)
 
 
